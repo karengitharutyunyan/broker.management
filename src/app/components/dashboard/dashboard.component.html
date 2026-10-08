@@ -1,0 +1,562 @@
+<!-- Server Control Panel -->
+<div class="app-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⚙️</span>
+      <span class="logo-text">ServerCtrl</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="#" id="nav-servers">
+        <span class="nav-icon">🖥️</span>
+        <span>Серверы</span>
+      </a>
+      @if (selectedServer()) {
+      <a class="nav-item" href="#section-details" id="nav-logs">
+        <span class="nav-icon">📋</span>
+        <span>Детали и Логи</span>
+      </a>
+      }
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <span class="user-avatar">A</span>
+        <div class="user-info">
+          <span class="user-name">{{ currentUser }}</span>
+          <span class="user-role">Администратор</span>
+        </div>
+      </div>
+      <button class="btn-logout" id="btn-logout" (click)="logout()" title="Выйти">🚪</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">Управление серверами</h1>
+        <span class="breadcrumb">Панель управления / Серверы</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost btn-sm" id="btn-refresh" (click)="loadServers()" title="Обновить">
+          🔄 Обновить
+        </button>
+        <button class="btn btn-primary" id="btn-add-server" (click)="openAdd()">
+          <span>＋</span> Добавить сервер
+        </button>
+      </div>
+    </header>
+
+    <!-- Deployment Progress Banner -->
+    @if (deploymentProgress(); as progress) {
+    <div class="deployment-progress-banner" id="deployment-progress-banner">
+      <div class="progress-info">
+        <span class="progress-icon">🚀</span>
+        <div class="progress-text">
+          <span class="progress-title">
+            Выполняется деплой сервера ({{ activeTenant }})
+            @if (pendingQueue.length > 1) {
+            [в очереди осталось: {{ pendingQueue.length - 1 }}]
+            }
+          </span>
+          <span class="progress-message">{{ progress.message }}</span>
+        </div>
+        <span class="progress-percentage">{{ progress.percentage }}%</span>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" [style.width.%]="progress.percentage"></div>
+      </div>
+    </div>
+    }
+
+    <!-- API Error banner -->
+    @if (apiError()) {
+    <div class="api-error-banner" id="api-error-banner">
+      ❌ {{ apiError() }}
+      <button class="btn-retry" (click)="loadServers()">Повторить</button>
+    </div>
+    }
+
+    <!-- Stat cards -->
+    <section class="stats-row" aria-label="Статистика серверов">
+      <div class="stat-card stat-total">
+        <div class="stat-icon">🖥️</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ servers().length }}</span>
+          <span class="stat-label">Всего серверов</span>
+        </div>
+      </div>
+      <div class="stat-card stat-running">
+        <div class="stat-icon">🟢</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ runningCount() }}</span>
+          <span class="stat-label">Работают</span>
+        </div>
+      </div>
+      <div class="stat-card stat-paused">
+        <div class="stat-icon">🟡</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ pausedCount() }}</span>
+          <span class="stat-label">На паузе</span>
+        </div>
+      </div>
+      <div class="stat-card stat-error">
+        <div class="stat-icon">🔴</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ errorCount() }}</span>
+          <span class="stat-label">Ошибки</span>
+        </div>
+      </div>
+      <div class="stat-card stat-pending">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ pendingCount() }}</span>
+          <span class="stat-label">В процессе</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table card -->
+    <section class="table-card">
+      <div class="table-header">
+        <h2 class="table-title">Список серверов</h2>
+        <span class="table-count">{{ servers().length }} записей</span>
+      </div>
+
+      <!-- Loading state -->
+      @if (loading()) {
+      <div class="loading-state" id="loading-state">
+        <span class="spinner-large"></span>
+        <span>Загрузка серверов...</span>
+      </div>
+      }
+
+      @if (!loading()) {
+      <div class="tenant-groups">
+        @for (group of serversByTenant(); track group.tenant) {
+        <div class="tenant-group">
+          <div class="tenant-header" (click)="toggleTenant(group.tenant)">
+            <div class="tenant-header-title">
+              <span class="tenant-expander-icon">{{ expandedTenants().has(group.tenant) ? '▼' : '▶' }}</span>
+              <span class="tenant-name">{{ group.tenant }}</span>
+            </div>
+            <span class="tenant-count">{{ group.servers.length }} серверов</span>
+          </div>
+          
+          @if (expandedTenants().has(group.tenant)) {
+          <div class="table-wrapper">
+            <table class="server-table" aria-label="Таблица серверов">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>IP Сервера</th>
+                  <th>Tenant</th>
+                  <th>Домен</th>
+                  <th>URL</th>
+                  <th>Type</th>
+                  <th>Хранилище</th>
+                  <th>Ветка</th>
+                  <th>Статус</th>
+                  <th>Создан</th>
+                  <th>Обновлен</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (entry of group.servers; track entry.id; let i = $index) {
+                <tr class="table-row table-row-clickable"
+                  [class.row-running]="entry.processStatus === ProcessStatus.Running"
+                  [class.row-paused]="entry.processStatus === ProcessStatus.Paused"
+                  [class.row-selected]="selectedServer()?.id === entry.id" (click)="selectServer(entry)">
+                  <td class="col-index">{{ i + 1 }}</td>
+                  <td class="col-server">
+                    <span class="server-name">{{ entry.serverIp ?? '—' }}</span>
+                  </td>
+                  <td class="col-tenant">
+                    <span class="tenant-badge">{{ entry.tenant ?? '—' }}</span>
+                  </td>
+                  <td class="col-domain">{{ entry.domain ?? '—' }}</td>
+                  <td class="col-url">
+                    <span class="truncate-url" [title]="entry.url ?? ''">{{ entry.url ?? '—' }}</span>
+                  </td>
+                  <td class="col-type">
+                    <span>{{ entry.type }}</span>
+                  </td>
+                  <td class="col-storage">
+                    @if (getStoragePercentage(entry) !== null) {
+                    <div class="storage-container"
+                      [title]="(getStorageUsed(entry) | number:'1.1-2') + ' / ' + (getStorageTotal(entry) | number:'1.1-2') + ' GB (' + (getStoragePercentage(entry) | number:'1.0-1') + '%)'">
+                      <div class="storage-label">
+                        <span class="storage-text">{{ getStorageUsed(entry) | number:'1.0-1' }}/{{ getStorageTotal(entry) | number:'1.0-1' }} GB</span>
+                        <span class="storage-percent">{{ getStoragePercentage(entry) | number:'1.0-0' }}%</span>
+                      </div>
+                      <div class="storage-bar">
+                        <div class="storage-fill"
+                          [style.width.%]="getStoragePercentage(entry)"
+                          [class.fill-warning]="(getStoragePercentage(entry) ?? 0) >= 75 && (getStoragePercentage(entry) ?? 0) < 90"
+                          [class.fill-danger]="(getStoragePercentage(entry) ?? 0) >= 90">
+                        </div>
+                      </div>
+                    </div>
+                    } @else {
+                    <span class="storage-empty">—</span>
+                    }
+                  </td>
+                  <td class="col-branch">
+                    <span class="branch-badge">
+                      <span class="branch-icon">⎇</span>
+                      {{ entry.branch ?? '—' }}
+                    </span>
+                  </td>
+                  <td class="col-status">
+                    <span class="status-badge" [class]="'status-' + statusLabel(entry.processStatus)">
+                      <span class="status-dot"></span>
+                      @if (entry.processStatus === ProcessStatus.Running) { Работает }
+                      @else if (entry.processStatus === ProcessStatus.Error) { Ошибка }
+                      @else if (entry.processStatus === ProcessStatus.Creating) { В процессе Авто-деплой }
+                      @else if (entry.processStatus === ProcessStatus.Pausing) { В процессе Пауза }
+                      @else if (entry.processStatus === ProcessStatus.Resuming) { В процессе Возобновить }
+                      @else if (entry.processStatus === ProcessStatus.Deleting) { В процессе Удаление }
+                      @else if (entry.processStatus === ProcessStatus.Paused) { На паузе }
+                      @else if (entry.processStatus === ProcessStatus.CreationInQueue) { В очереди Авто-деплой }
+                      @else if (entry.processStatus === ProcessStatus.PausingInQueue) { В очереди Пауза }
+                      @else if (entry.processStatus === ProcessStatus.ResumingInQueue) { В очереди Возобновить}
+                      @else if (entry.processStatus === ProcessStatus.DeletionInQueue) { В очереди Удаление }
+                      @else { Неизвестно }
+                    </span>
+                  </td>
+                  <td class="col-date">{{ entry.createdAt | date:'dd.MM.yy HH:mm' }}</td>
+                  <td class="col-date">{{ entry.updatedAt ? (entry.updatedAt | date:'dd.MM.yy HH:mm') : '—' }}</td>
+                  <td class="col-actions">
+                    <div class="action-buttons">
+                      <!-- Deploy -->
+                      <button class="action-btn btn-start" [id]="'btn-deploy-' + entry.id" title="Авто-деплой"
+                        (click)="deployServer(entry); $event.stopPropagation()">
+                        🚀
+                      </button>
+                      <!-- Paused -->
+                      @if(entry.processStatus == ProcessStatus.Running) {
+                      <button class="action-btn btn-paused" [id]="'btn-paused-' + entry.id" title="Пауза"
+                        (click)="pauseServer(entry); $event.stopPropagation()">
+                        ⏸
+                      </button>
+                      }
+                      @if(entry.processStatus == ProcessStatus.Paused) {
+                      <button class="action-btn btn-paused" [id]="'btn-paused-' + entry.id" title="Возобновить"
+                        (click)="pauseServer(entry); $event.stopPropagation()">
+                        ▶️
+                      </button>
+                      }
+                      <!-- Edit -->
+                      <button class="action-btn btn-edit" [id]="'btn-edit-' + entry.id" title="Редактировать"
+                        (click)="openEdit(entry); $event.stopPropagation()">
+                        ✏️
+                      </button>
+                      <!-- Delete -->
+                      <button class="action-btn btn-delete" [id]="'btn-delete-' + entry.id" title="Удалить"
+                        (click)="deleteEntry(entry); $event.stopPropagation()">
+                        🗑
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          }
+        </div>
+        }
+        @empty {
+        <div class="empty-state">
+          <span class="empty-icon">📭</span>
+          <span>Серверов нет. Нажмите «Добавить сервер»</span>
+        </div>
+        }
+      </div>
+      }
+    </section>
+
+    <!-- ===================== SERVER DETAILS & LOGS ===================== -->
+    @if (selectedServer(); as server) {
+    <section class="details-card" id="section-details">
+      <div class="details-header">
+        <div class="details-title-group">
+          <h2 class="table-title">🖥️ Детали сервера: {{ server.serverIp ?? '—' }}</h2>
+          <span class="tenant-badge">{{ server.tenant ?? '—' }}</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btn-close-details" (click)="closeDetails()">
+          ✕ Закрыть
+        </button>
+      </div>
+
+      <div class="details-body">
+        <div class="details-grid">
+          <!-- Left side: properties metadata -->
+          <div class="details-info">
+            <h3 class="details-section-title">⚙️ Параметры конфигурации</h3>
+            <div class="info-table">
+              <div class="info-row">
+                <span class="info-label">IP Сервера:</span>
+                <span class="info-value font-mono">{{ server.serverIp ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Хранилище:</span>
+                <span class="info-value font-mono">
+                  @if (getStoragePercentage(server) !== null) {
+                    {{ getStorageUsed(server) | number:'1.1-2' }} GB / {{ getStorageTotal(server) | number:'1.1-2' }} GB ({{ getStoragePercentage(server) | number:'1.0-1' }}%)
+                  } @else { — }
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Пользователь:</span>
+                <span class="info-value">{{ server.username ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Пароль:</span>
+                <span class="info-value font-mono">
+                  @if (server.password) { •••••••• } @else { — }
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Tenant:</span>
+                <span class="info-value">{{ server.tenant ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Домен:</span>
+                <span class="info-value">{{ server.domain ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Git URL:</span>
+                <span class="info-value truncate-url" [title]="server.giT_URL ?? ''">{{ server.giT_URL ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">URL:</span>
+                <span class="info-value truncate-url" [title]="server.url ?? ''">{{ server.url ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Type:</span>
+                <span class="info-value">{{ server.type }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Ветка Git:</span>
+                <span class="info-value">
+                  @if (server.branch) {
+                  <span class="branch-badge"><span class="branch-icon">⎇</span> {{ server.branch }}</span>
+                  } @else { — }
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Git Token:</span>
+                <span class="info-value font-mono">
+                  @if (server.giT_TOKEN) { •••••••• } @else { — }
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Cloudflare Zone ID:</span>
+                <span class="info-value font-mono truncate-cf" [title]="server.cF_ZONE_ID ?? ''">{{ server.cF_ZONE_ID ??
+                  '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Cloudflare Token:</span>
+                <span class="info-value font-mono">
+                  @if (server.cF_API_TOKEN) { •••••••• } @else { — }
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Статус:</span>
+                <span class="info-value">
+                  <span class="status-badge" [class]="'status-' + statusLabel(server.processStatus)">
+                    <span class="status-dot"></span>
+                    @if (server.processStatus === ProcessStatus.Running) { Работает }
+
+                    @else if (server.processStatus === ProcessStatus.Error) { Ошибка }
+
+                    @else if (server.processStatus === ProcessStatus.Creating
+                    || server.processStatus === ProcessStatus.Pausing
+                    || server.processStatus === ProcessStatus.Resuming
+                    || server.processStatus === ProcessStatus.Deleting) { В процессе }
+
+                    @else if (server.processStatus === ProcessStatus.Paused) { На паузе }
+
+                    @else if (server.processStatus === ProcessStatus.CreationInQueue
+                    || server.processStatus === ProcessStatus.PausingInQueue
+                    || server.processStatus === ProcessStatus.ResumingInQueue
+                    || server.processStatus === ProcessStatus.DeletionInQueue) { В очереди}
+
+                    @else { Неизвестно }
+                  </span>
+                </span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">Создан:</span>
+                <span class="info-value">{{ server.createdAt | date:'dd.MM.yyyy HH:mm:ss' }}</span>
+              </div>
+              @if (server.updatedAt) {
+              <div class="info-row">
+                <span class="info-label">Обновлен:</span>
+                <span class="info-value">{{ server.updatedAt | date:'dd.MM.yyyy HH:mm:ss' }}</span>
+              </div>
+              }
+            </div>
+          </div>
+
+          <!-- Right side: log terminal console output -->
+          <div class="details-logs">
+            <h3 class="details-section-title">📟 Вывод логов (Console)</h3>
+            <div class="console-wrapper">
+              <pre class="console-output">{{ server.log || 'Нет доступных логов для этого сервера.' }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    }
+  </main>
+</div>
+<!-- ===================== MODAL ===================== -->
+@if (showModal) {
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal modal-wide" (click)="$event.stopPropagation()" id="modal-dialog" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h3 class="modal-title">{{ isEdit ? 'Редактировать сервер' : 'Добавить сервер' }}</h3>
+      <button class="modal-close" id="btn-modal-close" (click)="closeModal()">✕</button>
+    </div>
+    <div class="modal-body modal-body-grid">
+
+      <!-- Server type selector (only on create) -->
+      @if (!isEdit) {
+      <div class="form-group form-group-full">
+        <label class="field-label">Тип сервера</label>
+        <div class="server-type-tabs">
+          <button type="button" class="type-tab" [class.active]="form.type === ServerTypeEnum.AdminApi"
+            id="tab-server-admin-api" (click)="form.type = ServerTypeEnum.AdminApi">Admin API</button>
+          <button type="button" class="type-tab" [class.active]="form.type === ServerTypeEnum.AdminWeb"
+            id="tab-server-admin-web" (click)="form.type = ServerTypeEnum.AdminWeb">Admin Web</button>
+          <button type="button" class="type-tab" [class.active]="form.type === ServerTypeEnum.BrokerApi"
+            id="tab-server-broker-api" (click)="form.type = ServerTypeEnum.BrokerApi">Broker API</button>
+          <button type="button" class="type-tab" [class.active]="form.type === ServerTypeEnum.BrokerWeb"
+            id="tab-server-broker-web" (click)="form.type = ServerTypeEnum.BrokerWeb">Broker Web</button>
+        </div>
+      </div>
+      }
+
+      <div class="form-group">
+        <label for="input-serverIp">IP Сервера *</label>
+        <input id="input-serverIp" type="text" class="form-input" placeholder="192.168.1.1" [(ngModel)]="form.serverIp"
+          list="list-serverIps" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-username">Username</label>
+        <input id="input-username" type="text" name="fakeuser" class="form-input" placeholder="root"
+          [(ngModel)]="form.username" list="list-usernames" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-password">Password</label>
+        <input id="input-password" type="password" name="fakepass" class="form-input" placeholder="••••••••"
+          [(ngModel)]="form.password" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-tenant">Tenant</label>
+        <input id="input-tenant" type="text" class="form-input" placeholder="my-tenant" [(ngModel)]="form.tenant"
+          list="list-tenants" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-domain">Domain</label>
+        <input id="input-domain" type="text" class="form-input" placeholder="example.com" [(ngModel)]="form.domain"
+          list="list-domains" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-branch">Git Branch</label>
+        <input id="input-branch" type="text" class="form-input" placeholder="main" [(ngModel)]="form.branch"
+          list="list-branches" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-gitUrl">Git URL</label>
+        <input id="input-gitUrl" type="text" class="form-input" placeholder="https://github.com/org/repo.git"
+          [(ngModel)]="form.giT_URL" list="list-gitUrls" />
+      </div>
+      <div class="form-group">
+        <label for="input-gitToken">Git Token</label>
+        <input id="input-gitToken" type="text" class="form-input" placeholder="ghp_..." [(ngModel)]="form.giT_TOKEN"
+          list="list-gitTokens" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-cfZone">CF Zone ID</label>
+        <input id="input-cfZone" type="text" class="form-input" placeholder="Cloudflare Zone ID"
+          [(ngModel)]="form.cF_ZONE_ID" list="list-cfZones" />
+      </div>
+
+      <div class="form-group">
+        <label for="input-cfToken">CF API Token</label>
+        <input id="input-cfToken" type="text" class="form-input" placeholder="Cloudflare API Token"
+          [(ngModel)]="form.cF_API_TOKEN" list="list-cfTokens" />
+      </div>
+
+      <!-- Datalists for autocomplete/dropdown selection -->
+      <datalist id="list-serverIps">
+        @for (val of uniqueServerIps(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-usernames">
+        @for (val of uniqueUsernames(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-tenants">
+        @for (val of uniqueTenants(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-domains">
+        @for (val of uniqueDomains(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-branches">
+        @for (val of uniqueBranches(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-gitUrls">
+        @for (val of uniqueGitUrls(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-urls">
+        @for (val of uniqueUrls(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-types">
+        <option [value]="0"></option>
+        <option [value]="1"></option>
+      </datalist>
+      <datalist id="list-gitTokens">
+        @for (val of uniqueGitTokens(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-cfZones">
+        @for (val of uniqueCfZones(); track val) { <option [value]="val"></option> }
+      </datalist>
+      <datalist id="list-cfTokens">
+        @for (val of uniqueCfTokens(); track val) { <option [value]="val"></option> }
+      </datalist>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-cancel" (click)="closeModal()">Отмена</button>
+      <button class="btn btn-primary" id="btn-save" (click)="saveForm()" [disabled]="formLoading">
+        @if (formLoading) { <span class="spinner-sm"></span> Отправка... }
+        @else { {{ isEdit ? 'Сохранить' : 'Добавить' }} }
+      </button>
+    </div>
+  </div>
+</div>
+}
+
+<!-- ===================== NOTIFICATION ===================== -->
+@if (notification) {
+<div class="notification" [class]="'notif-' + notification.type" id="notification-toast">
+  <span class="notif-icon">
+    @if (notification.type === 'success') { ✅ }
+    @else if (notification.type === 'error') { ❌ }
+    @else { ℹ️ }
+  </span>
+  <span>{{ notification.message }}</span>
+</div>
+}

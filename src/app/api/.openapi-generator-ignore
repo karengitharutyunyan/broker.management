@@ -1,0 +1,5 @@
+# Ignore default git and configuration files
+.gitignore
+git_push.sh
+README.md
+tsconfig.json

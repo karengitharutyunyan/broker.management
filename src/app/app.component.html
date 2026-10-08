@@ -1,0 +1,430 @@
+<!-- Server Control Panel -->
+<div class="app-wrapper">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">⚙️</span>
+      <span class="logo-text">ServerCtrl</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="#" id="nav-servers">
+        <span class="nav-icon">🖥️</span>
+        <span>Серверы</span>
+      </a>
+      <a class="nav-item" href="#" id="nav-logs">
+        <span class="nav-icon">📋</span>
+        <span>Логи</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-badge">
+        <span class="user-avatar">A</span>
+        <div class="user-info">
+          <span class="user-name">{{ currentUser }}</span>
+          <span class="user-role">Администратор</span>
+        </div>
+      </div>
+      <button class="btn-logout" id="btn-logout" (click)="logout()" title="Выйти">🚪</button>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">Управление серверами</h1>
+        <span class="breadcrumb">Панель управления / Серверы</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost btn-sm" id="btn-refresh" (click)="loadServers()" title="Обновить">
+          🔄 Обновить
+        </button>
+        <button class="btn btn-primary" id="btn-add-server" (click)="openAdd()">
+          <span>＋</span> Добавить сервер
+        </button>
+      </div>
+    </header>
+
+    <!-- API Error banner -->
+    @if (apiError()) {
+      <div class="api-error-banner" id="api-error-banner">
+        ❌ {{ apiError() }}
+        <button class="btn-retry" (click)="loadServers()">Повторить</button>
+      </div>
+    }
+
+    <!-- Stat cards -->
+    <section class="stats-row" aria-label="Статистика серверов">
+      <div class="stat-card stat-total">
+        <div class="stat-icon">🖥️</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ servers().length }}</span>
+          <span class="stat-label">Всего серверов</span>
+        </div>
+      </div>
+      <div class="stat-card stat-running">
+        <div class="stat-icon">🟢</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ runningCount() }}</span>
+          <span class="stat-label">Работают</span>
+        </div>
+      </div>
+      <div class="stat-card stat-paused">
+        <div class="stat-icon">🟡</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ pausedCount() }}</span>
+          <span class="stat-label">На паузе</span>
+        </div>
+      </div>
+      <div class="stat-card stat-stopped">
+        <div class="stat-icon">🔴</div>
+        <div class="stat-body">
+          <span class="stat-value">{{ stoppedCount() }}</span>
+          <span class="stat-label">Остановлены</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Table card -->
+    <section class="table-card">
+      <div class="table-header">
+        <h2 class="table-title">Список серверов</h2>
+        <span class="table-count">{{ servers().length }} записей</span>
+      </div>
+
+      <!-- Loading state -->
+      @if (loading()) {
+        <div class="loading-state" id="loading-state">
+          <span class="spinner-large"></span>
+          <span>Загрузка серверов...</span>
+        </div>
+      }
+
+      @if (!loading()) {
+        <div class="table-wrapper">
+          <table class="server-table" aria-label="Таблица серверов">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>IP Сервера</th>
+                <th>Tenant</th>
+                <th>Домен</th>
+                <th>Хранилище</th>
+                <th>Ветка</th>
+                <th>Статус</th>
+                <th>Создан</th>
+                <th>Обновлен</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (entry of servers(); track entry.id; let i = $index) {
+                <tr class="table-row"
+                    [class.row-running]="entry.processStatus === ProcessStatus.Running"
+                    [class.row-paused]="entry.processStatus === ProcessStatus.Paused"
+                    [class.row-stopped]="entry.processStatus === ProcessStatus.Stopped || entry.processStatus === ProcessStatus.Unknown">
+                  <td class="col-index">{{ i + 1 }}</td>
+                  <td class="col-server">
+                    <span class="server-name">{{ entry.serverIp ?? '—' }}</span>
+                  </td>
+                  <td class="col-tenant">
+                    <span class="tenant-badge">{{ entry.tenant ?? '—' }}</span>
+                  </td>
+                  <td class="col-domain">{{ entry.domain ?? '—' }}</td>
+                  <td class="col-storage">
+                    @if (getStoragePercentage(entry) !== null) {
+                    <div class="storage-container"
+                      [title]="(getStorageUsed(entry) | number:'1.1-2') + ' / ' + (getStorageTotal(entry) | number:'1.1-2') + ' GB (' + (getStoragePercentage(entry) | number:'1.0-1') + '%)'">
+                      <div class="storage-label">
+                        <span class="storage-text">{{ getStorageUsed(entry) | number:'1.0-1' }}/{{ getStorageTotal(entry) | number:'1.0-1' }} GB</span>
+                        <span class="storage-percent">{{ getStoragePercentage(entry) | number:'1.0-0' }}%</span>
+                      </div>
+                      <div class="storage-bar">
+                        <div class="storage-fill"
+                          [style.width.%]="getStoragePercentage(entry)"
+                          [class.fill-warning]="(getStoragePercentage(entry) ?? 0) >= 75 && (getStoragePercentage(entry) ?? 0) < 90"
+                          [class.fill-danger]="(getStoragePercentage(entry) ?? 0) >= 90">
+                        </div>
+                      </div>
+                    </div>
+                    } @else {
+                    <span class="storage-empty">—</span>
+                    }
+                  </td>
+                  <td class="col-branch">
+                    <span class="branch-badge">
+                      <span class="branch-icon">⎇</span>
+                      {{ entry.branch ?? '—' }}
+                    </span>
+                  </td>
+                  <td class="col-status">
+                    <span class="status-badge" [class]="'status-' + statusLabel(entry.processStatus)">
+                      <span class="status-dot"></span>
+                      @if (entry.processStatus === ProcessStatus.Running) { Работает }
+                      @else if (entry.processStatus === ProcessStatus.Paused)  { На паузе }
+                      @else if (entry.processStatus === ProcessStatus.Stopped) { Остановлен }
+                      @else { Неизвестно }
+                    </span>
+                  </td>
+                  <td class="col-date">{{ entry.createdAt | date:'dd.MM.yy HH:mm' }}</td>
+                  <td class="col-date">{{ entry.updatedAt ? (entry.updatedAt | date:'dd.MM.yy HH:mm') : '—' }}</td>
+                  <td class="col-actions">
+                    <div class="action-buttons">
+                      <!-- Deploy -->
+                      <button
+                        class="action-btn btn-start"
+                        [id]="'btn-deploy-' + entry.id"
+                        title="Авто-деплой"
+                        (click)="deployServer(entry)">
+                        🚀
+                      </button>
+                      <!-- Edit -->
+                      <button
+                        class="action-btn btn-edit"
+                        [id]="'btn-edit-' + entry.id"
+                        title="Редактировать"
+                        (click)="openEdit(entry)">
+                        ✏️
+                      </button>
+                      <!-- Delete -->
+                      <button
+                        class="action-btn btn-delete"
+                        [id]="'btn-delete-' + entry.id"
+                        title="Удалить"
+                        (click)="deleteEntry(entry)">
+                        🗑
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+              @empty {
+                @if (!loading()) {
+                  <tr>
+                    <td colspan="9" class="empty-state">
+                      <span class="empty-icon">📭</span>
+                      <span>Серверов нет. Нажмите «Добавить сервер»</span>
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <!-- ===================== LOGS ===================== -->
+    <section class="logs-card" id="section-logs">
+      <div class="logs-header">
+        <div class="logs-title-group">
+          <h2 class="table-title">📋 Журнал событий</h2>
+          <span class="table-count">{{ filteredLogs().length }} записей</span>
+        </div>
+        <div class="logs-controls">
+          <div class="log-filter-tabs" role="tablist">
+            <button class="log-tab" [class.active]="logFilter() === 'all'"
+                    id="log-tab-all" (click)="setLogFilter('all')">Все</button>
+            <button class="log-tab log-tab-success" [class.active]="logFilter() === 'success'"
+                    id="log-tab-success" (click)="setLogFilter('success')">✅ Успех</button>
+            <button class="log-tab log-tab-warning" [class.active]="logFilter() === 'warning'"
+                    id="log-tab-warning" (click)="setLogFilter('warning')">⚠️ Предупреждение</button>
+            <button class="log-tab log-tab-error" [class.active]="logFilter() === 'error'"
+                    id="log-tab-error" (click)="setLogFilter('error')">❌ Ошибка</button>
+            <button class="log-tab log-tab-info" [class.active]="logFilter() === 'info'"
+                    id="log-tab-info" (click)="setLogFilter('info')">ℹ️ Инфо</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-clear-logs" (click)="clearLogs()">
+            🗑 Очистить
+          </button>
+        </div>
+      </div>
+
+      <div class="logs-body" id="logs-container">
+        @if (filteredLogs().length === 0) {
+          <div class="logs-empty">
+            <span class="empty-icon">📭</span>
+            <span>Нет записей в журнале</span>
+          </div>
+        }
+        @for (log of filteredLogs(); track log.id) {
+          <div class="log-row" [class]="'log-row-' + log.level"
+               [class.log-row-expanded]="isExpanded(log.id)"
+               (click)="log.output ? toggleExpand(log.id) : null"
+               [class.log-row-clickable]="!!log.output">
+
+            <div class="log-row-main">
+              <span class="log-level-badge" [class]="'log-badge-' + log.level">
+                @if (log.level === 'success') { ✅ }
+                @else if (log.level === 'warning') { ⚠️ }
+                @else if (log.level === 'error') { ❌ }
+                @else { ℹ️ }
+                {{ log.level | uppercase }}
+              </span>
+
+              <span class="log-time">{{ log.timestamp | date:'HH:mm:ss' }}</span>
+              <span class="log-server">{{ log.server }}</span>
+              <span class="log-message">{{ log.message }}</span>
+
+              <div class="log-row-right">
+                @if (log.command) {
+                  <span class="log-cmd-preview" title="{{ log.command }}">
+                    <span class="cmd-icon">⌨</span>{{ log.command }}
+                  </span>
+                }
+                @if (log.exitCode !== undefined) {
+                  <span class="exit-code" [class.exit-ok]="log.exitCode === 0" [class.exit-err]="log.exitCode !== 0">
+                    exit {{ log.exitCode }}
+                  </span>
+                }
+                @if (log.output) {
+                  <span class="expand-arrow" [class.open]="isExpanded(log.id)">▾</span>
+                }
+              </div>
+            </div>
+
+            @if (isExpanded(log.id) && log.output) {
+              <div class="log-output-panel" (click)="$event.stopPropagation()">
+                <div class="log-output-header">
+                  <span class="output-title">📟 Вывод команды</span>
+                  @if (log.command) {
+                    <code class="output-cmd">$ {{ log.command }}</code>
+                  }
+                </div>
+                <div class="log-output-body">
+                  @for (line of log.output; track $index) {
+                    @if (line.text === '') {
+                      <div class="output-blank"></div>
+                    } @else {
+                      <div class="output-line" [class]="'output-' + line.type">
+                        <span class="output-prefix">
+                          @if (line.type === 'cmd')    { $ }
+                          @else if (line.type === 'stderr') { ! }
+                          @else if (line.type === 'info')   { # }
+                          @else { › }
+                        </span>
+                        <span class="output-text">{{ line.text }}</span>
+                      </div>
+                    }
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+
+  </main>
+</div>
+
+
+<!-- ===================== MODAL ===================== -->
+@if (showModal) {
+  <div class="modal-overlay" (click)="closeModal()" id="modal-overlay">
+    <div class="modal modal-wide" (click)="$event.stopPropagation()" id="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">{{ isEdit ? 'Редактировать сервер' : 'Добавить сервер' }}</h3>
+        <button class="modal-close" id="btn-modal-close" (click)="closeModal()">✕</button>
+      </div>
+      <div class="modal-body modal-body-grid">
+
+        <!-- Server type selector (only on create) -->
+        @if (!isEdit) {
+          <div class="form-group form-group-full">
+            <label class="field-label">Тип сервера</label>
+            <div class="server-type-tabs">
+              <button type="button" class="type-tab" [class.active]="form.serverType === 'api'"
+                      id="tab-server-api" (click)="form.serverType = 'api'">Admin API</button>
+              <button type="button" class="type-tab" [class.active]="form.serverType === 'web'"
+                      id="tab-server-web" (click)="form.serverType = 'web'">Admin Web</button>
+            </div>
+          </div>
+        }
+
+        <div class="form-group">
+          <label for="input-serverIp">IP Сервера *</label>
+          <input id="input-serverIp" type="text" class="form-input" placeholder="192.168.1.1"
+                 [(ngModel)]="form.serverIp" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-username">Username</label>
+          <input id="input-username" type="text" class="form-input" placeholder="root"
+                 [(ngModel)]="form.username" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-password">Password</label>
+          <input id="input-password" type="password" class="form-input" placeholder="••••••••"
+                 [(ngModel)]="form.password" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-tenant">Tenant</label>
+          <input id="input-tenant" type="text" class="form-input" placeholder="my-tenant"
+                 [(ngModel)]="form.tenant" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-domain">Domain</label>
+          <input id="input-domain" type="text" class="form-input" placeholder="example.com"
+                 [(ngModel)]="form.domain" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-branch">Git Branch</label>
+          <input id="input-branch" type="text" class="form-input" placeholder="main"
+                 [(ngModel)]="form.branch" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-gitUrl">Git URL</label>
+          <input id="input-gitUrl" type="text" class="form-input" placeholder="https://github.com/org/repo.git"
+                 [(ngModel)]="form.giT_URL" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-gitToken">Git Token</label>
+          <input id="input-gitToken" type="password" class="form-input" placeholder="ghp_..."
+                 [(ngModel)]="form.giT_TOKEN" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-cfZone">CF Zone ID</label>
+          <input id="input-cfZone" type="text" class="form-input" placeholder="Cloudflare Zone ID"
+                 [(ngModel)]="form.cF_ZONE_ID" />
+        </div>
+
+        <div class="form-group">
+          <label for="input-cfToken">CF API Token</label>
+          <input id="input-cfToken" type="password" class="form-input" placeholder="Cloudflare API Token"
+                 [(ngModel)]="form.cF_API_TOKEN" />
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btn-cancel" (click)="closeModal()">Отмена</button>
+        <button class="btn btn-primary" id="btn-save" (click)="saveForm()" [disabled]="formLoading">
+          @if (formLoading) { <span class="spinner-sm"></span> Отправка... }
+          @else { {{ isEdit ? 'Сохранить' : 'Добавить' }} }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ===================== NOTIFICATION ===================== -->
+@if (notification) {
+  <div class="notification" [class]="'notif-' + notification.type" id="notification-toast">
+    <span class="notif-icon">
+      @if (notification.type === 'success') { ✅ }
+      @else if (notification.type === 'error') { ❌ }
+      @else { ℹ️ }
+    </span>
+    <span>{{ notification.message }}</span>
+  </div>
+}

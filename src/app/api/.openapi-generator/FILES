@@ -1,0 +1,16 @@
+api.module.ts
+api/api.ts
+api/auth.service.ts
+api/manage.service.ts
+configuration.ts
+encoder.ts
+index.ts
+model/createServerRequest.ts
+model/deleteServerRequest.ts
+model/loginRequest.ts
+model/models.ts
+model/pausePlayServerRequest.ts
+model/server.ts
+model/updateServerBalanceRequest.ts
+param.ts
+variables.ts

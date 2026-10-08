@@ -1,0 +1,72 @@
+<div class="login-bg">
+  <div class="login-card">
+
+    <div class="login-brand">
+      <span class="brand-icon">⚙️</span>
+      <h1 class="brand-name">ServerCtrl</h1>
+      <p class="brand-sub">Broker Management Panel</p>
+    </div>
+
+    <form class="login-form" (ngSubmit)="submit()" id="login-form">
+
+      @if (error()) {
+        <div class="login-error" id="login-error">
+          <span>❌</span> {{ error() }}
+        </div>
+      }
+
+      <div class="field-group">
+        <label for="input-username" class="field-label">Пользователь</label>
+        <div class="field-input-wrap">
+          <span class="field-icon">👤</span>
+          <input
+            id="input-username"
+            type="text"
+            class="field-input"
+            placeholder="admin"
+            autocomplete="username"
+            [(ngModel)]="username"
+            name="username"
+            [disabled]="loading()"
+          />
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="input-password" class="field-label">Пароль</label>
+        <div class="field-input-wrap">
+          <span class="field-icon">🔒</span>
+          <input
+            id="input-password"
+            [type]="showPass ? 'text' : 'password'"
+            class="field-input"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            [(ngModel)]="password"
+            name="password"
+            [disabled]="loading()"
+          />
+          <button type="button" class="pass-toggle" (click)="togglePass()" id="btn-toggle-pass">
+            {{ showPass ? '🙈' : '👁️' }}
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="submit"
+        class="btn-login"
+        id="btn-login-submit"
+        [disabled]="loading()"
+      >
+        @if (loading()) {
+          <span class="spinner"></span> Вход...
+        } @else {
+          Войти
+        }
+      </button>
+
+    </form>
+
+    <p class="login-footer">Broker.ManagementApi v1.0</p>
+  </div>
+</div>
